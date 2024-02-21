@@ -1,5 +1,8 @@
 ## How to use
-To compile, call "gcc spotifeur.c -o spotifeur -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer"
+To compile, call 
+```
+gcc -lSDL2 -lSDL2_image -lSDL2_mixer -lSDL2_ttf src/* -I include/ -o spotifeur
+```
 
 Just launch spotifeur
 

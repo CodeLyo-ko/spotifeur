@@ -1,14 +1,9 @@
+#include "song.h"
+#include "thread.h"
+#include "util.h"
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_mixer.h>
-#include <SDL2/SDL_ttf.h>
-
-#define min(a, b) (a) < (b) ? (a) : (b)
 
 #define FAILURE 0
 #define SUCCESS 1
@@ -46,116 +41,29 @@
 
 #define ARTIST_SEP ", "
 
-int lockControl = 0;
-int endingThread = 0;
-int del_song = 0;
-
-int WINDOW_WIDTH  = 500;
-int WINDOW_HEIGHT = 500;
-
-typedef struct 
-{
-    SDL_Texture* img;
-
-    char* title;
-
-    char** artist;
-    int nb_artist;
-    char* artist_concat;
-
-    char* album;
-
-    SDL_Texture* info_texture;
-    SDL_Rect info_pos;
-    double ratio_info;
-
-    Mix_Music* music;
-
-    char* dir_name;
-} song_t;
-
-typedef struct
-{
-    song_t* songs;
-    int* nb_songs;
-    int* id_song;
-
-    SDL_Renderer* renderer;
-} data_song_t;
-
-int str_isValid(char* str)
-{
-    int len = strlen(str);
-    for (int i = 0; i < len; i++)
-    {
-        if ((str[i] >= 'a' && str[i] <= 'z') || (str[i] >= 'A' && str[i] <= 'Z') || (str[i] >= '0' && str[i] <= '9'))
-        {
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-char* str_strip(char* src)
-{
-    char* dest = strdup(src);
-
-    int len = strlen(dest);
-    for (int i = 0; i < len; i++)
-    {
-        if (!((dest[i] >= 'a' && dest[i] <= 'z') || (dest[i] >= 'A' && dest[i] <= 'Z') || (dest[i] >= '0' && dest[i] <= '9')))
-        {
-            dest[i] = '_';
-        }
-    }
-
-    return dest;
-}
-
-char* extension(char* path)
-{
-    char* ext;
-
-    int len = strlen(path);
-    int i = len - 1;
-    
-    while (i >= 0 && path[i] != '.')
-    {
-        i--;
-    }
-    
-    if (i < 0)
-    {
-        ext = calloc(1, sizeof(char));
-        return ext;
-    }
-
-    ext = calloc(len - i + 1, sizeof(char));
-    int i_ext = 0;
-
-    while (i < len)
-    {
-        ext[i_ext++] = path[i++];
-    }
-
-    return ext;
-}
+extern int endingThread;
+extern int del_song;
 
 void free_song(song_t song)
 {
+    SDL_DestroyTexture(song.img);
+    
     free(song.title);
-    free(song.album);
-    free(song.artist_concat);
-    free(song.dir_name);
+    
     for (int j = 0; j < song.nb_artist; j++)
     {
         free(song.artist[j]);
     }
     free(song.artist);
-    SDL_DestroyTexture(song.img);
+    free(song.artist_concat);
+
+    free(song.album);
+
     SDL_DestroyTexture(song.info_texture);
+
     Mix_FreeMusic(song.music);
+
+    free(song.dir_name);
 }
 
 void free_songs(song_t* songs, int n)
@@ -170,6 +78,7 @@ void free_songs(song_t* songs, int n)
 song_t* cpySong(song_t song)
 {
     song_t* cpy = malloc(sizeof(song_t));
+
     cpy->img = song.img;
 
     cpy->title = song.title;
@@ -187,38 +96,8 @@ song_t* cpySong(song_t song)
     cpy->music = song.music;
 
     cpy->dir_name = song.dir_name;
+    
     return cpy;
-}
-
-int initSDL(SDL_Window** window, SDL_Renderer** renderer)
-{
-    SDL_Init(SDL_INIT_VIDEO);
-    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024);
-    IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG);
-    TTF_Init();
-
-    *window = SDL_CreateWindow("Spotifeur", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
-    *renderer = SDL_CreateRenderer(*window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_TARGETTEXTURE);
-
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "2");
-
-    if ((*window == NULL) || (*renderer == NULL))
-    {
-        return FAILURE;
-    }
-
-    return SUCCESS;
-}
-
-int dirExist(char* path)
-{
-    struct stat stats;
-    stat(path, &stats);
-    if (S_ISDIR(stats.st_mode))
-    {
-        return 1;
-    }
-    return 0;
 }
 
 int getSongInfo(char* song_path, char** title, char** artist, int* nb_artist, char** album)
@@ -309,6 +188,7 @@ int getSongInfo(char* song_path, char** title, char** artist, int* nb_artist, ch
     return SUCCESS;
 
 }
+
 
 int initSongs(SDL_Renderer* renderer, song_t* songs, int* nb_songs)
 {
@@ -514,7 +394,7 @@ int importSong(void* data)
     song.music = NULL;
     song.dir_name = NULL;
 
-    data_song_t* songs_data = data;
+    data_thread_t* songs_data = data;
     
     FILE* fp = NULL;
 
@@ -932,7 +812,7 @@ int delSong(void* data)
     }
 
 
-    data_song_t* dat = data;
+    data_thread_t* dat = data;
 
     song_t* songs = dat->songs;
     int* id_song = dat->id_song;
@@ -1018,281 +898,4 @@ int delSong(void* data)
     endingThread = 1;
     del_song = 1;
     return SUCCESS;
-}
-
-int mainLoop(SDL_Window* window, SDL_Renderer* renderer)
-{
-    int quit = 0;
-
-    SDL_Event event;
-    SDL_Thread* thread = NULL;
-
-    SDL_Texture* bg_texture = NULL;
-    SDL_Rect bg_pos = {0};
-    double bg_ratio;
-    int bg_width, bg_height;
-
-    song_t* songs = NULL; 
-    int nb_songs;
-    int id_song = 0;
-    SDL_Rect song_img_pos;
-
-    song_t* song_tmp = NULL;
-
-
-    data_song_t* data = NULL;
-
-    char* path = NULL;
-
-    bg_texture = IMG_LoadTexture(renderer, BACKGROUND_PATH);
-
-    if (bg_texture == NULL)
-    {
-        printf("Failed to load background\n");
-        return FAILURE;
-    }
-
-    SDL_QueryTexture(bg_texture, NULL, NULL, &bg_width, &bg_height);
-
-
-    bg_ratio = (double)(bg_height) / bg_width;
-
-    songs = malloc(MAX_SONGS * sizeof(song_t));
-
-    if (initSongs(renderer, songs, &nb_songs) == FAILURE)
-    {
-        printf("Failed to get songs data\n");
-        return FAILURE;
-    }
-
-    data = malloc(sizeof(data_song_t));
-
-    if (nb_songs)
-    {
-        song_tmp = cpySong(songs[0]);
-    }
-
-    while (!quit)
-    {
-        while (SDL_PollEvent(&event))
-        {
-            if (endingThread)
-            {
-                SDL_DetachThread(thread);
-                endingThread = 0;
-                lockControl = 0;
-                SDL_PumpEvents();
-                SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
-                if (del_song) 
-                {
-                    free_song(*song_tmp);
-                    del_song = 0;
-                }
-                if (nb_songs)
-                {
-                    free(song_tmp);
-                    song_tmp = cpySong(songs[id_song]);
-                }
-                else
-                {
-                    free(song_tmp);
-                    song_tmp = NULL;
-                }
-                break;
-            }
-            else if (lockControl)
-            {
-                break;
-            }
-            if (event.type == SDL_QUIT || (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE))
-            {
-                quit = 1;
-            }
-            else if (event.type == SDL_KEYDOWN)
-            {
-                switch (event.key.keysym.sym)
-                {
-                    case (SDLK_RIGHT):
-                        if (song_tmp == NULL)
-                        {
-                            break;
-                        }
-                        id_song++;
-                        if (id_song >= nb_songs)
-                        {
-                            id_song -= nb_songs;
-                        }
-
-                        free(song_tmp);
-                        song_tmp = cpySong(songs[id_song]);
-
-                        if (Mix_PlayingMusic())
-                        {
-                            Mix_HaltMusic();
-                        }
-
-                        break;
-
-                    case (SDLK_LEFT):
-                        if (song_tmp == NULL)
-                        {
-                            break;
-                        }
-                        id_song--;
-                        if (id_song < 0)
-                        {
-                            id_song += nb_songs;
-                        }
-
-                        free(song_tmp);
-                        song_tmp = cpySong(songs[id_song]);
-
-                        if (Mix_PlayingMusic())
-                        {
-                            Mix_HaltMusic();
-                        }
-
-                        break;
-
-                    case (SDLK_SPACE):
-                        if (song_tmp == NULL)
-                        {
-                            break;
-                        }
-                        if (songs[id_song].music == NULL)
-                        {
-                            break;
-                        }
-                        if (Mix_PlayingMusic())
-                        {
-                        if (Mix_PausedMusic())
-                        {
-                            Mix_ResumeMusic();
-                        }
-                        else
-                        {
-                            Mix_PauseMusic();
-                        }
-                        }
-                        else 
-                        {
-                            Mix_PlayMusic(songs[id_song].music, -1);
-                        }
-                        break;
-
-                    case (SDLK_d):
-                        if (song_tmp == NULL)
-                        {
-                            break;
-                        }
-                        data->songs = songs;
-                        data->nb_songs = &nb_songs;
-                        data->id_song = &id_song;
-                        data->renderer = renderer;
-
-                        lockControl = 1;
-                        thread = SDL_CreateThread(delSong, "thread_to_del", data);
-                        break;
-                    
-                    case (SDLK_i):
-                        data->songs = songs;
-                        data->nb_songs = &nb_songs;
-                        data->id_song = &id_song;
-                        data->renderer = renderer;
-
-                        lockControl = 1;
-                        thread = SDL_CreateThread(importSong, "thread_to_import", data);
-                        break;
-                }
-            }
-        }
-
-        SDL_GetWindowSize(window, &WINDOW_WIDTH, &WINDOW_HEIGHT);
-
-
-        if (bg_ratio > 1)
-        {
-            bg_pos.h = WINDOW_HEIGHT;
-            bg_pos.w = bg_pos.h * bg_ratio;
-
-            if (bg_pos.w > WINDOW_WIDTH)
-            {
-                bg_pos.w = WINDOW_WIDTH;
-                bg_pos.h = bg_pos.w / bg_ratio;
-            }
-        }
-        else
-        {
-            bg_pos.w = WINDOW_WIDTH;
-            bg_pos.h = bg_pos.w * bg_ratio;
-
-            if (bg_pos.h > WINDOW_HEIGHT)
-            {
-                bg_pos.h = WINDOW_HEIGHT;
-                bg_pos.w = bg_pos.h / bg_ratio;
-            }
-        }
-
-        bg_pos.x = (WINDOW_WIDTH - bg_pos.w)/2;
-        bg_pos.y = (WINDOW_HEIGHT - bg_pos.h)/2;
-
-        song_img_pos.w = song_img_pos.h = (min(bg_pos.h, bg_pos.w))/2;
-        
-        song_img_pos.x = (bg_pos.w - song_img_pos.w)/2 + bg_pos.x;
-        song_img_pos.y = (bg_pos.h - song_img_pos.h)/3 + bg_pos.y;
-        
-        if (song_tmp != NULL)
-        {
-            
-            song_tmp->info_pos.h = bg_pos.h / 20.0;
-            song_tmp->info_pos.w = song_tmp->info_pos.h * song_tmp->ratio_info;
-            song_tmp->info_pos.x = (bg_pos.w - song_tmp->info_pos.w) / 2 + bg_pos.x;
-            song_tmp->info_pos.y = (song_img_pos.y + song_img_pos.h) + 10;
-        }
-
-
-        SDL_RenderClear(renderer);
-        
-        SDL_RenderCopy(renderer, bg_texture, NULL, &bg_pos);
-
-        if (song_tmp != NULL)
-        {
-            SDL_RenderCopy(renderer, song_tmp->img, NULL, &song_img_pos);
-            SDL_RenderCopy(renderer, song_tmp->info_texture, NULL, &(song_tmp->info_pos));
-        }
-
-        SDL_RenderPresent(renderer);
-
-    }
-
-    free(song_tmp);
-    free(data);
-    free_songs(songs, nb_songs);
-    SDL_DestroyTexture(bg_texture);
-
-    return SUCCESS;
-}
-
-int main()
-{
-    SDL_Window* window;
-    SDL_Renderer* renderer;
-    
-    if (initSDL(&window, &renderer) == FAILURE)
-    {
-        printf("Failure during the initialisation\n");
-        return FAILURE;
-    }
-
-    mainLoop(window, renderer);
-
-    SDL_DestroyWindow(window);
-    SDL_DestroyRenderer(renderer);
-    IMG_Quit();
-    Mix_Quit();
-    TTF_Quit();
-    SDL_Quit();
-
-
-    return 0;
 }
