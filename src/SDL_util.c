@@ -1,17 +1,5 @@
 #include "SDL_util.h"
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_mixer.h>
-#include <SDL2/SDL_ttf.h>
-
-#define FAILURE 0
-#define SUCCESS 1
-
-extern int WINDOW_WIDTH;
-extern int WINDOW_HEIGHT;
+#include "global.h"
 
 int initSDL(SDL_Window** window, SDL_Renderer** renderer)
 {

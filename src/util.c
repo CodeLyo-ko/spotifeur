@@ -1,10 +1,5 @@
 #include "util.h"
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/stat.h>
+#include "global.h"
 
 int str_isValid(char* str)
 {
